@@ -113,35 +113,51 @@ async function openBranchSelector() {
 }
 
 async function initExtension() {
-    console.log("[branch-to-main] Инициализация...");
+    console.log("[branch-to-main] Попытка инициализации интерфейса...");
 
-    // Создаем элемент списка для меню расширений
-    // Мы используем классы, которые SillyTavern применяет для пунктов этого меню
-    const menuItemHtml = `
-        <div id="btn_make_branch_main" class="list-group-item menu_button" title="Сделать ветку основной">
-            <i class="fa-solid fa-code-branch"></i>
-            <span data-i18n="Make Branch Main">Make Branch Main</span>
+    const buttonId = 'btn_make_branch_main';
+    
+    // HTML для кнопки (иконка для верхней панели)
+    const topBarButtonHtml = `
+        <div id="${buttonId}" class="menu_button fa-solid fa-code-branch" 
+             title="Make Branch Main" 
+             style="cursor: pointer; display: flex; align-items: center; justify-content: center;">
         </div>
     `;
 
-    // Ждем появления меню расширений (оно находится рядом с вводом текста)
-    const interval = setInterval(() => {
-        const extensionsMenu = document.getElementById('extensions_menu');
-        
-        if (extensionsMenu) {
-            clearInterval(interval);
-            
-            // Проверяем, не добавлена ли кнопка уже (чтобы не дублировать при обновлении)
-            if (!document.getElementById('btn_make_branch_main')) {
-                $(extensionsMenu).append(menuItemHtml);
-                
-                // Навешиваем событие клика
-                $(document).on('click', '#btn_make_branch_main', async () => {
-                    await openBranchSelector();
-                });
-            }
+    // Функция для вставки кнопки
+    const injectButton = () => {
+        if (document.getElementById(buttonId)) return; // Уже добавлена
+
+        // 1. Пытаемся добавить в верхнюю панель (Extensions Menu Bar)
+        const topMenu = document.getElementById('extensionsMenu');
+        if (topMenu) {
+            $(topMenu).append(topBarButtonHtml);
+            console.log("[branch-to-main] Кнопка добавлена в верхнюю панель.");
         }
-    }, 1000);
+
+        // 2. Дополнительно добавляем в выпадающее меню у строки ввода (если оно есть)
+        const chatMenu = document.getElementById('extensions_menu');
+        if (chatMenu) {
+            const listButton = `
+                <div id="${buttonId}_list" class="list-group-item menu_button">
+                    <i class="fa-solid fa-code-branch"></i>
+                    <span>Make Branch Main</span>
+                </div>
+            `;
+            $(chatMenu).append(listButton);
+            console.log("[branch-to-main] Пункт добавлен в меню чата.");
+        }
+    };
+
+    // Запускаем проверку каждые 2 секунды (на случай перерисовки UI Таверной)
+    setInterval(injectButton, 2000);
+
+    // Вешаем обработчик событий на документ (делегирование)
+    $(document).on('click', `#${buttonId}, #${buttonId}_list`, async () => {
+        console.log("[branch-to-main] Клик по кнопке зафиксирован.");
+        await openBranchSelector();
+    });
 }
 
 jQuery(initExtension);
