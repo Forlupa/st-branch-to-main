@@ -3,26 +3,112 @@
 
 const extensionName = 'branch-to-main';
 
+/* global characters, this_chid, chat_metadata, toastr, Swal, jQuery */
+
 /**
- * Получает список всех файлов чатов для текущего персонажа
+ * Пытается найти имя текущего персонажа всеми доступными способами
  */
+function getActiveCharacterName() {
+    // Способ 1: Из метаданных текущего открытого чата (самый надежный)
+    if (typeof chat_metadata !== 'undefined' && chat_metadata && chat_metadata.character_item) {
+        return chat_metadata.character_item;
+    }
+
+    // Способ 2: Через глобальный индекс текущего персонажа
+    if (typeof this_chid !== 'undefined' && this_chid !== null && characters && characters[this_chid]) {
+        return characters[this_chid].name;
+    }
+
+    // Способ 3: Если это мобильная версия или специфический билд, пробуем window
+    if (typeof window.this_chid !== 'undefined' && window.this_chid !== null && window.characters[window.this_chid]) {
+        return window.characters[window.this_chid].name;
+    }
+
+    return null;
+}
+
 async function getCharacterChats() {
     try {
-        // Проверяем, выбран ли персонаж
-        if (typeof this_chid === 'undefined' || this_chid === null) return {};
+        const charName = getActiveCharacterName();
+        if (!charName) {
+            console.error("[branch-to-main] Не удалось определить имя персонажа.");
+            return {};
+        }
 
-        const charName = characters[this_chid].name;
         const response = await fetch('/api/chats/get', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ch_name: charName })
         });
         
-        if (!response.ok) throw new Error('Ошибка API при получении чатов');
+        if (!response.ok) throw new Error('Ошибка API');
         return await response.json();
     } catch (error) {
         console.error(`[${extensionName}]`, error);
         return {};
+    }
+}
+
+async function openBranchSelector() {
+    console.log("[branch-to-main] Проверка состояния перед открытием...");
+
+    const charName = getActiveCharacterName();
+    
+    if (!charName) {
+        toastr.warning('Персонаж не определен. Попробуйте переоткрыть чат или отправить сообщение.');
+        console.log("Debug Info:", { 
+            this_chid: typeof this_chid !== 'undefined' ? this_chid : 'undefined', 
+            chat_metadata: typeof chat_metadata !== 'undefined' ? chat_metadata : 'undefined' 
+        });
+        return;
+    }
+
+    const chatsData = await getCharacterChats();
+    const chatFiles = Object.keys(chatsData);
+    
+    // Проверка наличия метаданных файла
+    const currentChat = (typeof chat_metadata !== 'undefined' && chat_metadata?.file_name) 
+                        ? chat_metadata.file_name 
+                        : null;
+
+    if (!currentChat) {
+        toastr.error('Файл текущего чата не определен.');
+        return;
+    }
+
+    const availableBranches = chatFiles.filter(file => file !== currentChat);
+
+    if (availableBranches.length === 0) {
+        toastr.info(`Для ${charName} других веток не найдено.`);
+        return;
+    }
+
+    let optionsHtml = '';
+    availableBranches.forEach(branch => {
+        const displayName = branch.replace('.jsonl', '');
+        optionsHtml += `<option value="${branch}">${displayName}</option>`;
+    });
+
+    const { isConfirmed, value: selectedBranch } = await Swal.fire({
+        title: 'Сделать ветку основной',
+        html: `
+            <div style="text-align:left;">
+                <p>Персонаж: <b>${charName}</b></p>
+                <p>Текущий чат: <i>${currentChat.replace('.jsonl', '')}</i></p>
+                <hr>
+                <p>Выберите ветку для замены:</p>
+                <select id="branch-select" class="swal2-select" style="display:flex; width:100%;">
+                    ${optionsHtml}
+                </select>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Применить замену',
+        preConfirm: () => document.getElementById('branch-select').value
+    });
+
+    if (isConfirmed && selectedBranch) {
+        await makeBranchMain(currentChat, selectedBranch);
     }
 }
 
@@ -74,66 +160,7 @@ async function makeBranchMain(mainChatFileName, branchFileName) {
     }
 }
 
-/* global characters, this_chid, chat_metadata, toastr, Swal, jQuery */
 
-async function openBranchSelector() {
-    console.log("[branch-to-main] Открытие окна выбора веток...");
-
-    // ПРОВЕРКА 1: Выбран ли персонаж?
-    if (typeof this_chid === 'undefined' || this_chid === null) {
-        toastr.warning('Сначала выберите персонажа!');
-        return;
-    }
-
-    // ПРОВЕРКА 2: Загружены ли метаданные чата?
-    // Используем проверку через typeof, чтобы не было ReferenceError
-    if (typeof chat_metadata === 'undefined' || !chat_metadata || !chat_metadata.file_name) {
-        toastr.error('Данные текущего чата не найдены. Попробуйте отправить сообщение или переоткрыть чат.');
-        return;
-    }
-
-    const chatsData = await getCharacterChats();
-    const chatFiles = Object.keys(chatsData);
-    
-    // Теперь мы уверены, что chat_metadata существует
-    const currentChat = chat_metadata.file_name; 
-
-    // Фильтруем список, чтобы не показывать текущий основной чат в списке веток
-    const availableBranches = chatFiles.filter(file => file !== currentChat);
-
-    if (availableBranches.length === 0) {
-        toastr.info('У этого персонажа нет других веток или файлов чата.');
-        return;
-    }
-
-    let optionsHtml = '';
-    availableBranches.forEach(branch => {
-        const displayName = branch.replace('.jsonl', '');
-        optionsHtml += `<option value="${branch}">${displayName}</option>`;
-    });
-
-    const { isConfirmed, value: selectedBranch } = await Swal.fire({
-        title: 'Выбрать основную ветку',
-        html: `
-            <div style="text-align:left; font-size: 0.9em;">
-                <p>Текущий файл: <b>${currentChat.replace('.jsonl', '')}</b></p>
-                <p>Выберите ветку, которая <b>заменит</b> текущий чат:</p>
-                <select id="branch-select" class="swal2-select" style="display:flex; width:100%; margin-top: 10px;">
-                    ${optionsHtml}
-                </select>
-                <p style="color: #ff5555; margin-top: 10px;"><b>Внимание:</b> Содержимое основного чата будет полностью перезаписано!</p>
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'Заменить',
-        cancelButtonText: 'Отмена',
-        preConfirm: () => document.getElementById('branch-select').value
-    });
-
-    if (isConfirmed && selectedBranch) {
-        await makeBranchMain(currentChat, selectedBranch);
-    }
-}
 
 async function initExtension() {
     console.log("[branch-to-main] Попытка инициализации интерфейса...");
