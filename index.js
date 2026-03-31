@@ -113,22 +113,32 @@ async function openBranchSelector() {
 }
 
 async function initExtension() {
-    // Добавляем кнопку в панель инструментов (Action Buttons)
-    const buttonHtml = `
-        <div id="btn_make_branch_main" class="menu_button fa-solid fa-code-branch" 
-             title="Сделать ветку основной" 
-             style="cursor: pointer;">
+    console.log("[branch-to-main] Инициализация...");
+
+    // Создаем элемент списка для меню расширений
+    // Мы используем классы, которые SillyTavern применяет для пунктов этого меню
+    const menuItemHtml = `
+        <div id="btn_make_branch_main" class="list-group-item menu_button" title="Сделать ветку основной">
+            <i class="fa-solid fa-code-branch"></i>
+            <span data-i18n="Make Branch Main">Make Branch Main</span>
         </div>
     `;
 
-    // Ждем появления панели и добавляем кнопку
+    // Ждем появления меню расширений (оно находится рядом с вводом текста)
     const interval = setInterval(() => {
-        const container = document.getElementById('chat_actions');
-        if (container) {
+        const extensionsMenu = document.getElementById('extensions_menu');
+        
+        if (extensionsMenu) {
             clearInterval(interval);
+            
+            // Проверяем, не добавлена ли кнопка уже (чтобы не дублировать при обновлении)
             if (!document.getElementById('btn_make_branch_main')) {
-                $(container).append(buttonHtml);
-                $(document).on('click', '#btn_make_branch_main', openBranchSelector);
+                $(extensionsMenu).append(menuItemHtml);
+                
+                // Навешиваем событие клика
+                $(document).on('click', '#btn_make_branch_main', async () => {
+                    await openBranchSelector();
+                });
             }
         }
     }, 1000);
