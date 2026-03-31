@@ -1,0 +1,10 @@
+{
+    "name": "branch-to-main",
+    "display_name": "Branch to Main",
+    "version": "1.0.0",
+    "description": "Позволяет выбрать любую ветку чата (branch) и сделать её основным (main) файлом чата.",
+    "author": "YourName",
+    "js": "index.js",
+    "css": "style.css",
+    "type": "client"
+}
