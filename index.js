@@ -74,15 +74,35 @@ async function makeBranchMain(mainChatFileName, branchFileName) {
     }
 }
 
+/* global characters, this_chid, chat_metadata, toastr, Swal, jQuery */
+
 async function openBranchSelector() {
+    console.log("[branch-to-main] Открытие окна выбора веток...");
+
+    // ПРОВЕРКА 1: Выбран ли персонаж?
+    if (typeof this_chid === 'undefined' || this_chid === null) {
+        toastr.warning('Сначала выберите персонажа!');
+        return;
+    }
+
+    // ПРОВЕРКА 2: Загружены ли метаданные чата?
+    // Используем проверку через typeof, чтобы не было ReferenceError
+    if (typeof chat_metadata === 'undefined' || !chat_metadata || !chat_metadata.file_name) {
+        toastr.error('Данные текущего чата не найдены. Попробуйте отправить сообщение или переоткрыть чат.');
+        return;
+    }
+
     const chatsData = await getCharacterChats();
     const chatFiles = Object.keys(chatsData);
+    
+    // Теперь мы уверены, что chat_metadata существует
     const currentChat = chat_metadata.file_name; 
 
+    // Фильтруем список, чтобы не показывать текущий основной чат в списке веток
     const availableBranches = chatFiles.filter(file => file !== currentChat);
 
     if (availableBranches.length === 0) {
-        toastr.info('Других веток не найдено.');
+        toastr.info('У этого персонажа нет других веток или файлов чата.');
         return;
     }
 
@@ -95,15 +115,18 @@ async function openBranchSelector() {
     const { isConfirmed, value: selectedBranch } = await Swal.fire({
         title: 'Выбрать основную ветку',
         html: `
-            <div style="text-align:left;">
-                <p>Текущий основной чат будет заменен выбранным ниже.</p>
-                <select id="branch-select" class="swal2-select" style="display:flex; width:100%;">
+            <div style="text-align:left; font-size: 0.9em;">
+                <p>Текущий файл: <b>${currentChat.replace('.jsonl', '')}</b></p>
+                <p>Выберите ветку, которая <b>заменит</b> текущий чат:</p>
+                <select id="branch-select" class="swal2-select" style="display:flex; width:100%; margin-top: 10px;">
                     ${optionsHtml}
                 </select>
+                <p style="color: #ff5555; margin-top: 10px;"><b>Внимание:</b> Содержимое основного чата будет полностью перезаписано!</p>
             </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Заменить основной чат',
+        confirmButtonText: 'Заменить',
+        cancelButtonText: 'Отмена',
         preConfirm: () => document.getElementById('branch-select').value
     });
 
